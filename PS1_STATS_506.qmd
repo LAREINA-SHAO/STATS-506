@@ -1,0 +1,210 @@
+---
+title: "Homework 1"
+format: html
+author: Yuchen Shao
+---
+
+## Problem Set #1
+
+### Problem 1 - Wine Data
+
+```{r}
+wine <- read.csv("wine.data", header = FALSE)
+#wine
+wine_name <- read.csv("wine.names",header = FALSE)
+#wine_name
+```
+
+a.  
+
+```{r}
+names(wine) <- c("class","alcohol_content","malic_acid","ash","alcalanity",
+                 "magnesium","phenols","flavaniods","nonflavanoiids",
+                 "proanthocyanins","color_intensity","hue","od280","proline")
+#wine
+```
+
+b.  
+
+```{r}
+table(wine$class)
+```
+
+The "wine.names" dataset reports the number of instances per class, with class 1 having 59 instances, class 2 having 71 instances, and class 3 having 48 instances. Therefore, the number of wines within each class is correctly calculated here as reported in “wine.names”.
+
+c\. (1)
+
+```{r}
+correlation <- cor(wine$alcohol_content, wine$color_intensity)
+correlation
+```
+
+\(2\)
+
+```{r}
+library(dplyr)
+correlations <- wine %>% group_by(class) %>% 
+  summarize(correlation=cor(alcohol_content,color_intensity))
+highest <- correlations %>% filter(correlation == max(correlation))
+lowest <- correlations %>% filter(correlation == min(correlation))
+highest
+lowest
+```
+
+The class 1 has the highest correlation between alcohol content and color intensity, which is 0.4082913. The class 2 has the lowest, which is 0.2697891.
+
+(3) 
+
+```{r}
+wine[which.max(wine$color_intensity), "alcohol_content"]
+```
+
+\(4\)
+
+```{r}
+mean(wine$proanthocyanins > wine$ash) * 100
+```
+
+d.  
+
+```{r}
+overall_means <- colMeans(wine[, -1])  
+class1_means <- colMeans(wine[wine$class == 1, -1])  
+class2_means <- colMeans(wine[wine$class == 2, -1])  
+class3_means <- colMeans(wine[wine$class == 3, -1]) 
+means <- rbind(overall_means,class1_means, class2_means,class3_means)
+means <- as.data.frame(means)
+rownames(means) <- c("Overall", "Class 1", "Class 2", "Class 3")
+means
+```
+
+e.  
+
+```{r}
+t.test(wine$phenols[wine$class == 1], wine$phenols[wine$class == 2])
+t.test(wine$phenols[wine$class == 1], wine$phenols[wine$class == 3])
+t.test(wine$phenols[wine$class == 2], wine$phenols[wine$class == 3])
+```
+
+The t-tests show that there are significant differences in phenol levels between all three class pairs, with very small p-values indicating that the differences in means are highly statistically significant.
+
+### Problem 2 - AskAManager.org Data
+
+a.  
+
+```{r}
+AAM <- read.csv("AskAManager.csv", header = FALSE)
+#AAM
+```
+
+b.  
+
+```{r}
+names(AAM) <- c("ID","Timestamp","Age","Industry","Job_Title",
+                "Job_Title_Context","Annual_Salary","Additional_Compensation",
+                "Currency","Other_Currency","Income_Context","Country",
+                "State","City","Years_Professional_Experience_Overall",
+                "Years_Professional_Experience_Field","Highest_Education",
+                "Gender","Race")
+#AAM
+```
+
+c.  
+
+```{r}
+nrow(AAM)
+nrow(AAM[AAM$Currency=="USD",])
+```
+
+d.  
+
+```{r}
+unique(AAM$Years_Professional_Experience_Field)
+unique(AAM$Years_Professional_Experience_Overall)
+```
+
+```{r}
+experience_vector <- c("1 year or less" ,"2 - 4 years", "5-7 years",
+                       "8 - 10 years","11 - 20 years","21 - 30 years",
+                       "31 - 40 years","41 years or more")
+
+AAM_sub=AAM[AAM$Years_Professional_Experience_Overall>=
+              AAM$Years_Professional_Experience_Field,]
+cat("Number of observations before cleaning:", nrow(AAM), "\n")
+cat("Number of observations after cleaning:", nrow(AAM_sub[AAM_sub$Age>=18,]), "\n")
+```
+
+e.  
+
+```{r}
+AAM$Annual_Salary <- as.numeric(as.character(AAM$Annual_Salary))
+AAM_cleaned <- AAM[AAM$Annual_Salary >= 12000 & AAM$Annual_Salary <= 500000, ]
+hist(AAM_cleaned$Annual_Salary, breaks = 50, main = "Distribution of Cleaned Salaries",
+     xlab = "Annual Salary")
+```
+
+Because the federal poverty line for an individual is around \$12,000 annually in the U.S., I choose 12000 as the low salary threshold. For the high-income threshold decision, I'd go with 50,000, because that way the distribution of salary remains balanced and not overly skewed, making the data easier to interpret.
+
+```{r}
+cat("Number of rows before eliminating extreme salaries:", nrow(AAM), "\n")
+cat("Number of rows after eliminating extreme salaries:", nrow(AAM_cleaned), "\n")
+```
+
+### Problem 3 - Palindromic Numbers
+
+a.  
+
+```{r}
+isPalindromic <- function(num) {
+  if (!is.numeric(num) || num <= 0 || floor(num) != num) {
+    stop("Input should be a positive integer.")
+  }
+  reversed_str <- paste(rev(strsplit(as.character(num), "")[[1]]), collapse = "")
+  reversed_to_num <- as.numeric(reversed_str)
+  return(list(isPalindromic = (num == reversed_to_num), reversed = reversed_to_num))
+}
+isPalindromic(728827)
+```
+
+```{r}
+isPalindromic(39951)
+```
+
+b.  
+
+```{r}
+isPalindromic_logic <- function(num) {
+  reversed_str <- paste(rev(strsplit(as.character(num), "")[[1]]), collapse = "")
+  return(num == as.numeric(reversed_str))
+}
+
+nextPalindrome <- function(num) {
+  if (!is.numeric(num)|| num <= 0 || floor(num) != num) {
+    stop("Input should be a positive integer.")
+  }
+  next_num <- num + 1
+  while (!isPalindromic_logic(next_num)) {
+    next_num <- next_num + 1
+  }
+  return(next_num)
+}
+nextPalindrome(7152)
+```
+
+```{r}
+nextPalindrome(765431537)
+```
+
+c.  
+
+```{r}
+cat("1.",nextPalindrome(391),"  ")
+cat("2.",nextPalindrome(9928),"  ")
+cat("3.",nextPalindrome(19272719),"  ")
+cat("4.",nextPalindrome(109),"  ")
+cat("5.",nextPalindrome(2),"  ")
+```
+
+Link to GitHub repository：
+
+<https://github.com/LAREINA-SHAO/STATS-506.git>
