@@ -1,0 +1,354 @@
+---
+title: "Homework02"
+author: "Yuchen Shao"
+format: pdf
+editor: visual
+---
+
+Link to GitHub repository：
+
+<https://github.com/LAREINA-SHAO/STATS-506.git>
+
+# Problem 1 - Dice Game
+
+## a. Version 1
+
+```{r}
+#' Title Dice Game Function - Using a loop
+#'
+#' @param n The number of dice to roll
+#'
+#' @return  Total winnings
+play_dice1 <- function(n){
+  if (n < 0) {
+    stop("Please input a non-negative number.")
+  }
+  
+  # if no dice are rolled, return 0
+  if (n == 0){
+    return(0)
+  }
+  
+  total_winnings <- 0
+  # roll the dice n times
+  die <- sample(1:6, n, replace = TRUE)
+
+  for (i in 1:n) {
+    # it costs $2 per game
+    total_winnings <- total_winnings - 2 
+    # on a roll of 3 or 5, win twice the roll
+    if (die[i] == 3 | die[i] == 5) {
+      total_winnings <- total_winnings + 2 * die[i]
+    }
+  }
+  return(total_winnings)
+}
+```
+
+## a. Version 2
+
+```{r}
+#' Title Dice Game Function - using built-in R vectorized functions
+#'
+#' @param n The number of dice to roll
+#'
+#' @return Total winnings
+play_dice2 <- function(n){
+  if (n < 0) {
+    stop("Please input a non-negative number.")
+  }
+  
+  # if no dice are rolled, return 0
+  if (n == 0){
+    return(0)
+  }
+  
+  # roll the dice n times
+  die <- sample(1:6, n, replace = TRUE)
+  
+  #winnings for rolls of 3 or 5
+  winnings <- ifelse(die == 3 | die == 5, 2 * die, 0)
+  total_winnings <- + sum(winnings) - 2 * n
+  return(total_winnings)
+}
+```
+
+## a. Version 3
+
+```{r}
+#' Title Dice Game Function - using table()
+#'
+#' @param n The number of dice to roll
+#'
+#' @return Total winnings
+play_dice3 <- function(n){
+  if (n < 0) {
+    stop("Please input a non-negative number.")
+  }
+  
+  # if no dice are rolled, return 0
+  if (n == 0){
+    return(0)
+  }
+  
+  # roll the dice n times
+  die <- sample(1:6, n, replace = TRUE)
+  
+  # create a frequency table (include 0 counts)
+  die_table <- table(factor(die, levels = 1:6))
+  
+  # add together winnings and subtract out the total cost
+  winnings_3 <- die_table["3"] * 2 * 3
+  winnings_5 <- die_table["5"] * 2 * 5
+  total_winnings <- winnings_3 + winnings_5 - 2 * n
+  names(total_winnings) <- NULL
+  return(total_winnings)
+}
+```
+
+## a. Version 4
+
+```{r}
+#' Title Dice Game Function - using sapply
+#'
+#' @param n The number of dice to roll
+#'
+#' @return Total winnings
+play_dice4 <- function(n){
+  if (n < 0) {
+    stop("Please input a non-negative number.")
+  }
+  
+  # if no dice are rolled, return 0
+  if (n == 0){
+    return(0)
+  }
+  
+  # roll the dice n times
+  die <- sample(1:6, n, replace = TRUE)
+  
+  # apply the game rules using sapply
+  winnings <- sapply(die, function(x) {
+    if (x == 3 || x == 5) {
+      return(2 * x)  
+    } else {
+      return(0)  
+    }
+  })
+  total_winnings <- sum(winnings) - 2 * n
+  return(total_winnings)
+}  
+```
+
+## b.
+
+```{r}
+# total winnings for Version 1 with inputs of 3 and 3,000 dice rolls
+c(play_dice1(3), play_dice1(3000))
+
+# total winnings for Version 2 with inputs of 3 and 3,000 dice rolls
+c(play_dice2(3), play_dice2(3000))
+
+# total winnings for Version 3 with inputs of 3 and 3,000 dice rolls
+c(play_dice3(3), play_dice3(3000))
+
+# total winnings for Version 4 with inputs of 3 and 3,000 dice rolls
+c(play_dice4(3), play_dice4(3000))
+```
+
+## c.
+
+```{r}
+# inputs 3
+# set the seed for reproducibility
+set.seed(111)  
+result1 <- play_dice1(3)
+
+# reset the seed to ensure same random sequence
+set.seed(111)  
+result2 <- play_dice2(3)
+
+set.seed(111) 
+result3 <- play_dice3(3)
+
+set.seed(111) 
+result4 <- play_dice4(3)
+
+c(result1, result2, result3, result4)
+```
+
+```{r}
+# inputs 3000
+set.seed(111)  
+result1 <- play_dice1(3000)
+
+set.seed(111)  
+result2 <- play_dice2(3000)
+
+set.seed(111) 
+result3 <- play_dice3(3000)
+
+set.seed(111) 
+result4 <- play_dice4(3000)
+
+c(result1, result2, result3, result4)
+```
+
+## d.
+
+```{r}
+#install.packages("microbenchmark")
+library(microbenchmark)
+```
+
+```{r}
+#' Title Benchmarks for Dice Game Implementations
+#'
+#' @param n The number of dice rolls
+#'
+#' @return A `microbenchmark` object showing the performance of each version
+BenchMarks <- function(n) {
+  microbenchmark(
+    play_dice1 = play_dice1(n),
+    play_dice2 = play_dice2(n),
+    play_dice3 = play_dice3(n),
+    play_dice4 = play_dice4(n),
+    times = 10  
+  )
+}
+
+set.seed(111)
+
+print(BenchMarks(1000))
+print(BenchMarks(100000))
+```
+
+The function implemented using R's built-in vectorized functions is the fastest, while the function using sapply() performs the slowest. The function using a loop performs better than the one using table() when handling large inputs, but this advantage is negligible with smaller input sizes.
+
+## e.
+
+```{r}
+#simulate 10000 times and pre-allocate a vector to store results
+results <- numeric(10000)  
+
+for (i in 1:10000) {
+  # play 1000 dice rolls in each simulation
+  results[i] <- play_dice2(1000)  
+}
+
+# Plot a histogram of the total winnings
+hist(results, breaks = 50, main = "Monte Carlo Simulation of Total Winnings",
+     xlab = "Total Winnings", col = "lightblue", border = "black")
+abline(v = mean(results), col = "red", lwd = 2)
+
+cat("Mean of total winnings:", mean(results), "\n")
+```
+
+This is not a fair game. The mean of total winnings across 10,000 simulations is significantly above zero, indicating that the player, on average, makes a profit.
+
+# Problem 2 - Linear Regression
+
+## a.
+
+```{r}
+cars <- read.csv("cars.csv")
+names(cars)
+```
+
+```{r}
+# rename the columns
+names(cars) <- c("height", "length", "width", "driveline", "engine_type",
+                 "hybrid","forward_gears", "transmission", "city_mpg",  
+                 "fuel_type","highway_mpg", "classification", "ID", "make", 
+                 "model_year", "year", "horsepower", "torque")
+```
+
+## b.
+
+```{r}
+gasoline_cars <- cars[cars$fuel == "Gasoline", ]
+```
+
+## c.
+
+```{r}
+# the distribution of highway_mpg
+hist(cars$highway_mpg, main = "Distribution of Highway MPG", 
+     xlab = "Highway MPG", col = "lightblue", border = "black")
+
+summary(gasoline_cars$highway_mpg)
+```
+
+```{r}
+# log transformation
+gasoline_cars$log_highway_mpg <- log(gasoline_cars$highway_mpg)
+
+# the distribution of log_highway_mpg 
+hist(gasoline_cars$log_highway_mpg, main = "Log-Transformed Highway MPG",
+     xlab = "Log(Highway MPG)", col = "purple", border = "black")
+  
+summary(gasoline_cars$log_highway_mpg)
+```
+
+The distribution of highway_mpg is highly right-skewed, suggesting the presence of outliers and a long tail of higher values. To normalize the distribution, I applied a logarithmic transformation, which helped reduce skewness and made the data more suitable for analysis.
+
+##d.
+
+```{r}
+# convert 'year' to a factor (categorical variable)
+gasoline_cars$year <- as.factor(gasoline_cars$year)
+# fit a linear regression model
+model <- lm(log_highway_mpg ~ torque + horsepower + height + length + width +
+              year, data = gasoline_cars)
+summary(model)
+```
+
+The estimated coefficient for torque is approximately -0.00229, meaning that for each additional unit of torque, the logarithm of highway MPG decreases by about 0.00229, holding all other variables constant. This indicates an inverse relationship between torque and highway fuel efficiency, where higher torque is associated with lower highway MPG. Additionally, this coefficient is highly significant, with a p-value less than 2e-16, confirming the robustness of the relationship.
+
+## e.
+
+```{r}
+#install.packages("interactions")
+library(interactions)
+```
+
+```{r}
+hist(gasoline_cars$horsepower)
+hist(gasoline_cars$torque)
+```
+
+```{r}
+model_interaction  <- lm(log_highway_mpg ~ horsepower*torque + height + length +
+                           width + as.factor(year), data = gasoline_cars)
+
+interact_plot(model_interaction, pred = "torque", modx = "horsepower", 
+                 # three different reasonable values of horsepower
+                 modx.values = c(150, 200, 250), 
+                 at = list(year = 2010),         
+                 main.title = "Interaction between Torque and Horsepower",
+                 xlab = "Torque", 
+                 ylab = "Log Highway MPG",
+                 legend.main = "Horsepower Levels")
+```
+
+The plot shows a negative relationship between torque and the logarithm of highway MPG, where increasing torque leads to a decrease in log_highway_mpg. The effect of torque on MPG is more pronounced for lower horsepower values, as shown by the steeper slopes for lower horsepower levels (150 and 200) compared to higher horsepower (250).
+
+## f.
+
+```{r}
+# design matrix X for the linear regression
+X <- model.matrix(log_highway_mpg ~ torque + horsepower + height + length +
+                    width + as.factor(year), data = gasoline_cars)
+y <- gasoline_cars$log_highway_mpg
+
+
+# manually compute the OLS regression coefficients using matrix operations
+# beta_hat = (X^T X)^(-1) X^T y
+XtX_inv <- solve(t(X) %*% X)
+XtY <- t(X) %*% y
+beta_hat <- XtX_inv %*% XtY
+
+cbind(model$coef, beta_hat)
+```
+
+The beta_hat calculated manually is the same as lm did prior.
