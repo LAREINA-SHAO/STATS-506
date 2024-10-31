@@ -1,0 +1,234 @@
+---
+title: "Homework04"
+author: "Yuchen Shao"
+format: pdf
+editor: visual
+---
+Link to GitHub repository：
+
+<https://github.com/LAREINA-SHAO/STATS-506.git>
+
+# Problem 1 - Tidyverse
+
+## a. 
+```{r}
+library(tidyverse)
+#install.packages("nycflights13")
+library(nycflights13)
+
+head(flights) 
+```
+```{r}
+head(airports)
+```
+```{r}
+flights %>% group_by(origin) %>% filter(n() >= 10) %>%
+  summarize(mean_dep_delay = mean(dep_delay, na.rm = TRUE),
+            med_dep_delay = median(dep_delay, na.rm = TRUE)) %>%
+  ungroup() %>%
+  rename(faa = origin) %>% left_join(airports, by = "faa") %>%
+  select(name, mean_dep_delay, med_dep_delay) %>%
+  arrange(desc(mean_dep_delay))
+```
+```{r}
+flights %>% group_by(dest) %>% filter(n() >= 10) %>%
+  summarize(mean_arr_delay = mean(arr_delay, na.rm = TRUE),
+            med_arr_delay = median(arr_delay, na.rm = TRUE)) %>%
+  ungroup() %>%
+  rename(faa = dest) %>% left_join(airports, by = "faa") %>%
+  select(name, mean_arr_delay, med_arr_delay) %>%
+  arrange(desc(mean_arr_delay)) %>%
+  print(n = Inf)
+```
+## b.
+```{r}
+head(planes)
+```
+
+```{r}
+flights %>% left_join(planes, by = "tailnum") %>%
+  mutate(speed_mph = distance / (air_time / 60)) %>%
+  group_by(model) %>%
+  summarize(avg_mph = mean(speed_mph, na.rm = TRUE),
+            n_flights = n()) %>%
+  ungroup() %>%
+  arrange(desc(avg_mph)) %>%
+  slice(1)
+```
+# Problem 2 - get_temp()
+```{r}
+nnmaps <- read_csv("chicago-nmmaps.csv")
+head(nnmaps)
+summary(nnmaps$ year)
+```
+```{r}
+#' Title request the average temperature for a given month
+#'
+#' @param month Month, either a numeric 1-12 or a string
+#' @param year A numeric year
+#' @param data The data set to obtain data from
+#' @param celsius Logically indicating whether the results should be in Celsius. 
+#' Default FALSE.
+#' @param average_fn A function with which to compute the mean. Default is mean.
+#'
+#' @return the average temperature
+#' @export
+#'
+#' @examples
+get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
+  tryCatch({
+    # Ensure 'month' is valid
+    if (is.numeric(month)) {
+      if (month < 1 || month > 12) {
+        warning("Month is out of range (must be between 1 and 12). Returning NA.")
+        return(NA)
+      }
+    } else if (is.character(month)) {
+      month <- match.arg(tolower(month), tolower(month.name))
+      month <- which(tolower(month.name) == tolower(month))
+    } else {
+      warning("Month should be numeric or character. Returning NA.")
+      return(NA)
+    }
+
+    # Ensure 'year' is valid
+    if (!is.numeric(year)) {
+      warning("Year should be numeric. Returning NA.")
+      return(NA)
+    }
+    if (year < 1997 || year > 2000) {
+      warning("Year is out of range (must be between 1997 and 2000). Returning NA.")
+      return(NA)
+    }
+
+    # Ensure 'average_fn' is a function
+    if (!is.function(average_fn)) {
+      warning("average_fn should be a function. Returning NA.")
+      return(NA)
+    }
+
+    # Filter and summarize data
+    result <- data %>%
+      select(temp, month_numeric, year) %>%
+      rename(year_col = year) %>%
+      filter(year_col == year, month_numeric == month) %>%
+      summarize(avg_tmp = average_fn(temp))
+
+    # Convert to Celsius if needed
+    if (celsius) {
+      result$avg_tmp <- (result$avg_tmp - 32) * (5 / 9)
+    }
+
+    return(result)
+  }, error = function(e) {
+    warning("An error occurred: ", e$message)
+    return(NA)
+  })
+}
+```
+
+```{r}
+get_temp("Apr", 1999, data = nnmaps)
+get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
+get_temp(10, 1998, data = nnmaps, average_fn = median)
+get_temp(13, 1998, data = nnmaps)
+```
+
+```{r}
+get_temp(2, 2005, data = nnmaps)
+```
+```{r}
+get_temp("November", 1999, data =nnmaps, celsius = TRUE,
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         })
+```
+# Problem 3 - Visualization
+```{r}
+data <- read.csv("df_for_ml_improved_new_market.csv")
+names(data)
+```
+```{r}
+#colnames(data)
+```
+## a.
+```{r}
+library(ggplot2)
+library(dplyr)
+
+avg_price_per_year <- data %>%
+  group_by(year) %>%
+  summarize(avg_price_usd = mean(price_usd, na.rm = TRUE)) %>%
+  ungroup()
+
+ggplot(avg_price_per_year, aes(x = year, y = avg_price_usd)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 1.5) +
+  labs(title = "Average Sales Price (USD) Over Time",
+       x = "Year",
+       y = "Average Sales Price (USD)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12)
+  )
+```
+## b.
+```{r}
+library(tidyr)
+
+genre_distribution <- data %>%
+  group_by(year) %>%
+  summarize(
+    Photography = mean(Genre___Photography, na.rm = TRUE),
+    Print = mean(Genre___Print, na.rm = TRUE),
+    Sculpture = mean(Genre___Sculpture, na.rm = TRUE),
+    Painting = mean(Genre___Painting, na.rm = TRUE),
+    Others = mean(Genre___Others, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = c(Photography, Print, Sculpture, Painting, Others),
+               names_to = "Genre", values_to = "Proportion")
+
+ggplot(genre_distribution, aes(x = year, y = Proportion, fill = Genre)) +
+  geom_area(alpha = 0.8, color = "white", size = 0.2) + 
+  scale_fill_brewer(palette = "Set2") + 
+  geom_area(alpha = 0.7) +
+  labs(title = "Distribution of Genre Over Time",
+       x = "Year",
+       y = "Proportion of Sales") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "right"
+  )
+```
+## c. 
+```{r}
+genre_price_trend <- data %>%
+  group_by(year) %>%
+  summarize(
+    Photography = mean(price_usd[Genre___Photography == 1], na.rm = TRUE),
+    Print = mean(price_usd[Genre___Print == 1], na.rm = TRUE),
+    Sculpture = mean(price_usd[Genre___Sculpture == 1], na.rm = TRUE),
+    Painting = mean(price_usd[Genre___Painting == 1], na.rm = TRUE),
+    Others = mean(price_usd[Genre___Others == 1], na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = c(Photography, Print, Sculpture, Painting, Others),
+               names_to = "Genre", values_to = "Avg_Price_USD")
+
+ggplot(genre_price_trend, aes(x = year, y = Avg_Price_USD, color = Genre)) +
+  geom_line(size = 1) +
+  geom_point(size = 1.5) +
+  labs(title = "Average Sales Price (USD) by Genre Over Time",
+       x = "Year",
+       y = "Average Sales Price (USD)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "right"
+  )
+```
+
