@@ -1,0 +1,445 @@
+---
+title: "Problem Set05"
+author: "Yuchen Shao"
+output:
+  pdf: true
+prefer-html: true
+editor: visual
+execute:
+  error: true
+---
+
+Link to GitHub repository：
+
+<https://github.com/LAREINA-SHAO/STATS-506.git>
+
+# Problem 1 - OOP Programming
+
+## a.
+
+```{r}
+#install.packages("Rcpp")
+library(Rcpp)
+```
+
+## constructor and validator
+
+```{r}
+setClass(
+  "Rational",
+  slots = c(
+    numerator = "integer",   
+    denominator = "integer"  
+  ),
+  validity = function(object) {
+# Check if the denominator is zero
+    if (object@denominator == 0L) {
+      return("Denominator cannot be zero.")
+    }
+   # Check if both numerator and denominator are integers 
+    if (!(is.integer(object@numerator) && is.integer(object@denominator))) {
+      return("Numerator and denominator must be integers.")
+    }
+    
+    TRUE
+  }
+)
+
+
+Rational <- function(numerator, denominator) {
+# Validate inputs are numeric
+  if (!is.numeric(numerator) || !is.numeric(denominator)) {
+    stop("Both numerator and denominator must be numeric values.")
+  }
+
+  numerator <- as.integer(numerator)
+  denominator <- as.integer(denominator)
+  
+  # Ensure inputs are single numeric values
+  if (length(numerator) != 1 || length(denominator) != 1) {
+    stop("Both numerator and denominator must be single numeric values.")
+  }
+
+  # Check if the denominator is zero
+  if (denominator == 0L) {
+    stop("Denominator cannot be zero.")
+  }
+  
+  # Create and return the Rational object
+  new("Rational", numerator = numerator, denominator = denominator)
+}
+```
+
+```{r}
+cppFunction('
+int gcd(int a, int b) {
+    a = abs(a);
+    b = abs(b);
+    while (b != 0) {
+        int t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+')
+
+cppFunction('
+int lcm(int a, int b) {
+    int max_val = std::max(a, b);  
+    while (true) {
+        if (max_val % a == 0 && max_val % b == 0) {
+            return max_val; 
+        }
+        max_val++;  
+    }
+}
+')
+
+```
+
+## show method
+
+```{r}
+setMethod("show", "Rational", function(object) {
+  cat(paste0(object@numerator, "/", object@denominator, "\n"))
+})
+```
+
+## simplify method
+
+```{r}
+setGeneric("simplify", function(x) standardGeneric("simplify"))
+
+setMethod("simplify", "Rational", function(x) {
+  gcd_value <- gcd(x@numerator, x@denominator)
+  Rational(
+    numerator = as.integer(x@numerator / gcd_value),
+    denominator = as.integer(x@denominator / gcd_value)
+  )
+})
+```
+
+## quotient method
+
+```{r}
+setGeneric("quotient", function(x, digits = 7) standardGeneric("quotient"))
+
+setMethod("quotient", "Rational", function(x, digits = 7) {
+  # Validate the digits argument
+  if (!is.numeric(digits) || digits < 0 || floor(digits) != digits) {
+    stop("digits must be a non-negative integer.")
+  }
+  result <- x@numerator / x@denominator
+  
+  # Format and print the result with the specified number of digits
+  formatted_result <- format(result, digits = digits)
+  print(formatted_result)
+  
+  result
+})
+
+```
+
+## Addition, subtraction, multiplication, division
+
+```{r}
+# Addition of two Rational numbers
+setMethod("+", signature(e1 = "Rational", e2 = "Rational"), function(e1, e2) {
+  # Compute the least common multiple of the denominators
+  common_denom <- lcm(e1@denominator, e2@denominator)
+  # Adjust numerators to the common denominator and add
+  result_num <- (e1@numerator * (common_denom / e1@denominator)) + 
+                (e2@numerator * (common_denom / e2@denominator))
+  # Return the simplified Rational
+  simplify(Rational(result_num, common_denom))
+})
+
+# Subtraction of two Rational numbers
+setMethod("-", signature(e1 = "Rational", e2 = "Rational"), function(e1, e2) {
+  # Compute the least common multiple of the denominators
+  common_denom <- lcm(e1@denominator, e2@denominator)
+  # Adjust numerators to the common denominator and subtract
+  result_num <- (e1@numerator * (common_denom / e1@denominator)) - 
+                (e2@numerator * (common_denom / e2@denominator))
+  # Return the simplified Rational
+  simplify(Rational(result_num, common_denom))
+})
+
+# Multiplication of two Rational numbers
+setMethod("*", signature(e1 = "Rational", e2 = "Rational"), function(e1, e2) {
+  simplify(Rational(e1@numerator * e2@numerator, e1@denominator * e2@denominator))
+})
+
+# Division of two Rational numbers
+setMethod("/", signature(e1 = "Rational", e2 = "Rational"), function(e1, e2) {
+  # Check for division by zero
+  if (e2@numerator == 0) stop("Division by zero is not allowed.")
+  simplify(Rational(e1@numerator * e2@denominator, e1@denominator * e2@numerator))
+})
+```
+
+## b.
+
+```{r}
+r1 <- Rational(24, 6)
+r2 <- Rational(7, 230) 
+r3 <- Rational(0, 4)
+```
+
+```{r}
+r1
+r3
+r1 + r2
+r1 - r2
+r1 * r2
+r1 / r2
+r1 + r3
+r1 * r3
+r2 / r3
+quotient(r1)
+quotient(r2)
+quotient(r2, digits = 3)
+quotient(r2, digits = 3.14)
+quotient(r2, digits = "avocado")
+q2 <- quotient(r2, digits = 3)
+q2
+quotient(r3)
+simplify(r1)
+simplify(r2)
+simplify(r3)
+```
+
+## c.
+
+```{r}
+# Case 1:
+tryCatch({
+  r_invalid <- Rational("abc", 5) 
+}, error = function(e) { print(e$message) })
+# Case 2:
+tryCatch({
+  r_invalid2 <- Rational(5, "def") 
+}, error = function(e) { print(e$message) })
+# Case 3:
+tryCatch({
+  r_invalid3 <- Rational(5, 0) 
+}, error = function(e) { print(e$message) })
+# Case 4:
+tryCatch({
+  r_invalid4 <- Rational(c(3, 4), 5) 
+}, error = function(e) { print(e$message) })
+# Case 5:
+tryCatch({
+  r_invalid5 <- Rational(3, c(4, 5)) 
+}, error = function(e) { print(e$message) })
+```
+
+# Problem 2 - plotly
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(plotly)
+data <- read.csv("df_for_ml_improved_new_market.csv")
+colnames(data)
+```
+
+## a.
+
+```{r}
+# Group data by year and calculate the sum for each genre, then reshape for visualization
+df_genre_distribution <- data %>%
+  group_by(year) %>%
+  summarize(
+    Photography = sum(Genre___Photography, na.rm = TRUE),
+    Print = sum(Genre___Print, na.rm = TRUE),
+    Sculpture = sum(Genre___Sculpture, na.rm = TRUE),
+    Painting = sum(Genre___Painting, na.rm = TRUE),
+    Others = sum(Genre___Others, na.rm = TRUE)
+  ) %>%
+  pivot_longer(
+    cols = Photography:Others, 
+    names_to = "Genre", 
+    values_to = "Count"
+  )
+```
+
+```{r}
+# Plotly line chart for genre distribution over time
+figure1 <- plot_ly(
+  data = df_genre_distribution, 
+  x = ~year, 
+  y = ~Count, 
+  color = ~Genre, 
+  type = 'scatter', 
+  mode = 'lines+markers',
+  line = list(width = 3),
+  marker = list(size = 8, symbol = "circle")
+) %>%
+  layout(
+    title = list(
+      text = "Genre Distribution Over Time",
+      font = list(size = 20), 
+      x = 0.5 
+    ),
+    xaxis = list(
+      title = "Year",
+      showgrid = TRUE,
+      gridcolor = "lightgrey"
+    ),
+    yaxis = list(
+      title = "Count",
+      showgrid = TRUE,
+      gridcolor = "lightgrey"
+    ),
+    showlegend = TRUE
+  )
+
+# Display the line chart
+figure1
+```
+
+## b.
+
+```{r}
+# Summarize data to calculate aggregate sales price by year
+data_aggregate <- data %>%
+  group_by(year) %>%
+  summarize(aggregate_sales = sum(price_usd, na.rm = TRUE))
+```
+
+```{r}
+# Create an interactive line chart for aggregate sales price
+figure2 <- plot_ly(
+  data = data_aggregate, 
+  x = ~year, 
+  y = ~aggregate_sales, 
+  type = 'scatter', 
+  mode = 'lines', 
+  line = list( width = 2)
+) %>%
+  layout(
+    title = list(
+      text = "Aggregate Sales Price Over Time",
+      font = list(size = 20)
+    ),
+    xaxis = list(title = "Year", showgrid = TRUE),
+    yaxis = list(title = "Aggregate Sales Price (USD)", showgrid = TRUE),
+    showlegend = FALSE
+  )
+
+figure2
+
+```
+
+```{r}
+# Transform data for average sales price by genre
+data_price_by_genre <- data %>%
+  pivot_longer(
+    cols = starts_with("Genre___"), 
+    names_to = "Genre", 
+    values_to = "present"
+  ) %>% 
+  filter(present == 1) %>% 
+  group_by(year, Genre) %>%
+  summarize(
+    avg_price = mean(price_usd, na.rm = TRUE), 
+    .groups = "drop"
+  ) %>%
+  mutate(Genre = gsub("Genre___", "", Genre)) # Clean genre names
+```
+
+```{r}
+# Create an interactive line chart for average sales price by genre
+figure3 <- plot_ly(
+  data = data_price_by_genre, 
+  x = ~year, 
+  y = ~avg_price, 
+  color = ~Genre, 
+  type = 'scatter', 
+  mode = 'lines+markers',
+  line = list(shape = 'linear', width = 2)
+) %>%
+  layout(
+    title = list(
+      text = "Change in Sales Price by Genre Over Time",
+      font = list(size = 20)
+    ),
+    xaxis = list(title = 'Year', showgrid = TRUE),
+    yaxis = list(title = 'Average Sales Price', showgrid = TRUE),
+    hovermode = "x unified",
+    legend = list(
+      title = list(text = "Genre", font = list(size = 14)),
+      orientation = "h",
+      x = 0.5,
+      xanchor = "center",
+      y = -0.2
+    )
+  )
+
+figure3
+```
+
+# Problem 3 - data.table
+
+```{r}
+library(nycflights13)
+library(data.table)
+```
+
+## a.
+
+```{r}
+flights_dt <- as.data.table(flights)
+airports_dt <- as.data.table(airports)
+planes <- as.data.table(planes)
+
+# Departure Delays
+departure_delays <- merge(
+  flights_dt[, .(faa = origin, dep_delay)], 
+  airports_dt[, .(faa, name)],             
+  by = "faa",
+  all.x = TRUE
+)[, .(
+  mean_delay = mean(dep_delay, na.rm = TRUE),  
+  med_delay = median(dep_delay, na.rm = TRUE), 
+  N = .N                                       
+), by = name][N >= 10][order(-mean_delay)]     
+
+print(departure_delays)
+
+# Arrivals Delays
+arrival_delays <- merge(
+  flights_dt[, .(faa = dest, arr_delay)],  
+  airports_dt[, .(faa, name)],           
+  by = "faa",
+  all.x = TRUE
+)[, .(
+  name = first(ifelse(is.na(name), faa, name)),  
+  N = .N,                                       
+  mean_delay = mean(arr_delay, na.rm = TRUE),   
+  med_delay = median(arr_delay, na.rm = TRUE)   
+), by = faa][N >= 10][order(-mean_delay)]      
+
+print(arrival_delays)
+
+```
+
+## b.
+
+```{r}
+# Fastest Aircraft Model
+fastest_model <- merge(
+  as.data.table(flights)[, .(tailnum, distance, air_time)], 
+  as.data.table(planes)[, .(tailnum, model)],              
+  by = "tailnum",
+  all.x = TRUE
+)[, .(
+  nflights = .N,  
+  avgmph = mean(distance / (air_time / 60), na.rm = TRUE)  
+), by = model][order(-avgmph)][1]  
+
+print(fastest_model)
+```
