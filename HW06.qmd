@@ -1,0 +1,268 @@
+---
+title: "506PS6"
+author: "Yuchen Shao"
+format: pdf
+editor: visual
+---
+
+Link to GitHub repository：
+
+<https://github.com/LAREINA-SHAO/STATS-506.git>
+
+# Problem - Stratified Bootstrapping
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(DBI)     # For interfacing with a database
+
+# Import the SQLite database of the Lahman data
+lahman <- dbConnect(RSQLite::SQLite(), "lahman_1871-2022.sqlite")
+dbListTables(lahman)
+```
+```{r}
+dbListFields(lahman, "Fielding")
+Fielding <- dbGetQuery(lahman, "SELECT * FROM Fielding")
+dbDisconnect(lahman)
+head(Fielding)
+```
+## a.
+```{r}
+fielding_data <- Fielding %>%
+  filter(!is.na(PO), !is.na(A), !is.na(InnOuts), InnOuts > 0) %>%
+  mutate(RF = 3*(PO + A) / InnOuts)
+
+fielding_data %>%
+  group_by(teamID) %>%
+  summarise(avg_RF = mean(RF, na.rm = TRUE)) %>% print
+```
+### Without any parallel processing
+```{r}
+# Stratified Bootstrap Function
+stratified_bootstrap <- function(data, target_col, strata_col, n_bootstrap) {
+  strata_levels <- unique(data[[strata_col]]) #team
+  bootstrap_samples <- list()
+  
+  # Perform stratified resampling
+  for (level in strata_levels) {
+    stratum_data <- data[data[[strata_col]] == level, ]
+    if (nrow(stratum_data) == 0) next  # Skip if no data in the stratum
+    sampled_data <- stratum_data[[target_col]][sample(1:nrow(stratum_data),
+                                                      n_bootstrap, replace = TRUE)]
+    bootstrap_samples[[level]] <- data.frame(
+      bootstrap_sample = sampled_data,
+      stratum = level
+    )
+  }
+  
+  # Combine results into a single data frame
+  bootstrap_result <- do.call(rbind, bootstrap_samples)
+  rownames(bootstrap_result) <- NULL
+  return(bootstrap_result)
+}
+
+# Run the stratified bootstrap and calculate the execution_time
+set.seed(123) 
+n_bootstrap <- 1000
+start_time <- Sys.time()
+bootstrap_results1 <- stratified_bootstrap(fielding_data, "RF", "teamID", n_bootstrap)
+end_time <- Sys.time()
+execution_time1 <- end_time - start_time
+
+# Estimate standard deviation for each team
+bootstrap_sd1 <- bootstrap_results1 %>%
+  group_by(stratum) %>%
+  summarise(
+    mean_RF = mean(bootstrap_sample, na.rm = TRUE),
+    std_error_RF = sd(bootstrap_sample, na.rm = TRUE)
+  )
+
+# Display results
+print(bootstrap_sd1)
+```
+### Using parallel processing with the parallel package
+```{r}
+library(parallel)
+
+# Stratified Bootstrap Function with Parallel Processing
+stratified_bootstrap_parallel <- function(data, target_col, strata_col, n_bootstrap) {
+  strata_levels <- unique(data[[strata_col]])
+  # Detect number of cores for parallel processing
+  num_cores <- max(1, floor(detectCores() / 2)) 
+  cl <- makeCluster(num_cores) # Create a cluster
+  
+  # Export required objects to the cluster
+  clusterExport(cl, varlist = c("data", "target_col", "strata_col", "n_bootstrap"),
+                envir = environment())
+
+  # Parallelized bootstrap for each stratum
+  bootstrap_samples <- parLapply(cl, strata_levels, function(level) {
+    stratum_data <- data[data[[strata_col]] == level, ]
+    if (nrow(stratum_data) == 0) return(NULL) # Skip if no data in stratum
+    sampled_data <- stratum_data[[target_col]][sample(1:nrow(stratum_data),
+                                                      n_bootstrap, replace = TRUE)]
+    data.frame(
+      bootstrap_sample = sampled_data,
+      stratum = level
+    )
+  })
+  
+  stopCluster(cl) # Stop the cluster
+ 
+  bootstrap_result <- do.call(rbind, bootstrap_samples)
+  rownames(bootstrap_result) <- NULL
+  return(bootstrap_result)
+}
+
+# Running the Bootstrap
+set.seed(123) 
+n_bootstrap <- 1000
+start_time <- Sys.time()
+bootstrap_results2 <- stratified_bootstrap_parallel(fielding_data, "RF", "teamID",
+                                                    n_bootstrap)
+end_time <- Sys.time()
+execution_time2 <- end_time - start_time
+
+# Summarizing the Results
+bootstrap_sd2 <- bootstrap_results2 %>%
+  group_by(stratum) %>%
+  summarise(
+    mean_RF = mean(bootstrap_sample, na.rm = TRUE),
+    std_error_RF = sd(bootstrap_sample, na.rm = TRUE)
+  )
+
+print(bootstrap_sd2)
+```
+### Using futures with the future package
+```{r, warning=FALSE}
+library(furrr)
+# Stratified Bootstrap Function with Future Package
+stratified_bootstrap_future <- function(data, target_col, strata_col, n_bootstrap) {
+  strata_levels <- unique(data[[strata_col]])
+ 
+  plan(multisession)
+  
+  # Perform bootstrap sampling 
+  bootstrap_samples <- future_map(strata_levels, function(level) {
+    stratum_data <- data[data[[strata_col]] == level, ]
+    if (nrow(stratum_data) == 0) return(NULL) # Skip if no data in stratum
+    sampled_data <- stratum_data[[target_col]][sample(1:nrow(stratum_data),
+                                                      n_bootstrap, replace = TRUE)]
+    data.frame(
+      bootstrap_sample = sampled_data,
+      stratum = level
+    )
+  })
+  
+  bootstrap_result <- do.call(rbind, bootstrap_samples)
+  rownames(bootstrap_result) <- NULL
+  plan(sequential)  # Reset to sequential
+  return(bootstrap_result)
+}
+
+# Running the Bootstrap
+set.seed(123) 
+n_bootstrap <- 1000
+start_time <- Sys.time()
+bootstrap_results3 <- stratified_bootstrap_future(fielding_data, "RF", "teamID",
+                                                  n_bootstrap)
+end_time <- Sys.time()
+execution_time3 <- end_time - start_time
+
+# Summarizing the Results
+bootstrap_sd3 <- bootstrap_results3 %>%
+  group_by(stratum) %>%
+  summarise(
+    mean_RF = mean(bootstrap_sample, na.rm = TRUE),
+    std_error_RF = sd(bootstrap_sample, na.rm = TRUE)
+  )
+
+print(bootstrap_sd3)
+```
+## b.
+```{r}
+bootstrap_sd1$method <- "No Parallel"
+bootstrap_sd2$method <- "Parallel"
+bootstrap_sd3$method <- "Future"
+
+top_10_results <- bind_rows(bootstrap_sd1, bootstrap_sd2, bootstrap_sd3) %>%
+  group_by(method) %>%
+  arrange(desc(mean_RF)) %>%
+  slice_head(n = 10) %>%
+  mutate(mean_RF = round(mean_RF, 3),
+         std_error_RF = round(std_error_RF, 3))
+
+cat("Top 10 Results - No Parallel\n")
+print(top_10_results[top_10_results$method == 'No Parallel', ])
+
+cat("\nTop 10 Results - Parallel\n")
+print(top_10_results[top_10_results$method == 'Parallel', ])
+
+cat("\nTop 10 Results - Future\n")
+print(top_10_results[top_10_results$method == 'Future', ])
+```
+## c.
+```{r}
+Execution_time_difference <- data.frame(
+  Method = c("No Parallel", "Parallel", "Future"),
+  Execution_Time = c(execution_time1, execution_time2, execution_time3)
+)
+print(Execution_time_difference)
+ggplot(Execution_time_difference, aes(x = Method, y = Execution_Time, fill = Method)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Execution Time Comparison",
+       x = "Method", y = "Execution Time (seconds)") +
+  theme_minimal()
+```
+```{r}
+# Extract unique teams for each method
+no_parallel_teams <- top_10_results %>%
+  filter(method == "No Parallel") %>%
+  pull(stratum)
+
+parallel_teams <- top_10_results %>%
+  filter(method == "Parallel") %>%
+  pull(stratum)
+
+future_teams <- top_10_results %>%
+  filter(method == "Future") %>%
+  pull(stratum)
+
+# Find the intersection of teams
+common_teams <- Reduce(intersect, list(no_parallel_teams, parallel_teams, future_teams))
+
+cat("Teams in the Top 10 for All Methods:\n")
+print(common_teams)
+```
+
+
+```{r}
+# Stability analysis: Variance in mean_RF estimates
+stability_test <- function(results1, results2, results3) {
+  combined <- bind_rows(
+    results1 %>% mutate(method = "No Parallel"),
+    results2 %>% mutate(method = "Parallel"),
+    results3 %>% mutate(method = "Future")
+  )
+  
+  combined %>%
+    group_by(method) %>%
+    summarise(
+      Variance_Mean_RF = var(mean_RF, na.rm = TRUE),
+      Variance_Std_Error_RF = var(std_error_RF, na.rm = TRUE)
+    )
+}
+
+# Run stability analysis
+stability_results <- stability_test(bootstrap_sd1, bootstrap_sd2, bootstrap_sd3)
+print(stability_results)
+```
+
+The No Parallel method is the fastest due to its simplicity and lack of parallelization overhead. The Parallel method, at around 1.5 seconds, is slower due to the cost of setting up clusters and managing multiple cores, but it balances performance and resource utilization well. The Future method is the slowest, possibly due to higher overhead in managing futures. The calculated average RF (mean_RF) for each team varies across the different methods, but the differences are not substantial and remain within a consistent range. Notably, teams such as "LS1," "RC1," "ELI," "MLU," "KEO," "BLA," and "RIC" consistently rank among the teams with the 10 highest RF across all three approaches, demonstrating their stability in performance regardless of the method used.
+
+
+
+
+
+
+
