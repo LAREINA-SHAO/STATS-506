@@ -1,0 +1,375 @@
+---
+title: "Final Project"
+format: pdf
+editor: visual
+---
+# Data preprocess
+```{r}
+# Load required libraries
+library(tidyverse)       # For data manipulation and visualization
+library(sf)              # For spatial data handling
+library(ggplot2)         # For creating maps
+library(rnaturalearth)   # For country and state boundaries
+library(ggspatial)       # For enhanced map visuals
+library(raster)          # For environmental layers like climate zones
+library(spdep)           # For spatial analysis
+```
+
+```{r}
+# Step 1: Load iNaturalist data
+library(dplyr)
+inat_data <- read_csv("observations.csv")
+inat_data <- as_tibble(inat_data)
+
+data <- inat_data %>%
+  dplyr::select(-iconic_taxon_name, -species_guess, -positional_accuracy) %>%
+  dplyr::filter(place_country_name == "United States")
+head(data)
+```
+
+```{r}
+# Step 2: Convert data to spatial object
+inat_sf <- data %>%
+  filter(!is.na(latitude) & !is.na(longitude)) %>%  # Remove missing coordinates
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)  # Define CRS as WGS84
+```
+
+
+```{r}
+library(tigris)
+usa_states <- states(cb = TRUE)  
+
+library(sf)
+usa_states_sf <- st_as_sf(usa_states)
+usa_states_sf <- st_transform(usa_states_sf, crs = 4326)
+
+
+inat_sf <- inat_sf %>%
+  filter(!is.na(common_name))
+glimpse(inat_sf)
+inat_sf_21 <- inat_sf %>%
+  filter(observed_on >= as.Date("2021-01-01") & observed_on <= as.Date("2021-12-31"))
+inat_sf_22 <- inat_sf %>%
+  filter(observed_on >= as.Date("2022-01-01") & observed_on <= as.Date("2022-12-31"))
+inat_sf_23 <- inat_sf %>%
+  filter(observed_on >= as.Date("2023-01-01") & observed_on <= as.Date("2023-12-31"))
+```
+# Geospatial Analysis
+```{r}
+# Restrict 
+lon_min <- -125  
+lon_max <- -66  
+lat_min <- 24   
+lat_max <- 50   
+
+usa_cropped <- st_crop(usa_states_sf, 
+                                xmin = lon_min, xmax = lon_max, 
+                                ymin = lat_min, ymax = lat_max)
+
+inat_sf_cropped <- st_crop(inat_sf_21, 
+                                    xmin = lon_min, xmax = lon_max, 
+                                    ymin = lat_min, ymax = lat_max)
+
+ggplot() +
+  geom_sf(data = usa_cropped, fill = "gray95", color = "black") +  
+  geom_sf(data = inat_sf_cropped, alpha = 0.7, size = 1) + 
+  labs(
+    title = "Spatial Distribution of Mammal Species in the USA (Mainland)",
+    subtitle = "Based on iNaturalist Observations (2021)",
+    color = "Common Name"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+```
+
+```{r}
+## Y22
+inat_sf_cropped_22 <- st_crop(inat_sf_22, 
+                                    xmin = lon_min, xmax = lon_max, 
+                                    ymin = lat_min, ymax = lat_max)
+
+
+ggplot() +
+  geom_sf(data = usa_cropped, fill = "gray95", color = "black") +  
+  geom_sf(data = inat_sf_cropped_22, alpha = 0.7, size = 1) +  
+  labs(
+    title = "Spatial Distribution of Mammal Species in the USA (Mainland)",
+    subtitle = "Based on iNaturalist Observations (2022)",
+    color = "Common Name"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+```
+
+```{r}
+# Y23
+inat_sf_cropped_23 <- st_crop(inat_sf_23, 
+                                    xmin = lon_min, xmax = lon_max, 
+                                    ymin = lat_min, ymax = lat_max)
+
+ggplot() +
+  geom_sf(data = usa_cropped, fill = "gray95", color = "black") +  
+  geom_sf(data = inat_sf_cropped_23, alpha = 0.7, size = 1) +  
+  labs(
+    title = "Spatial Distribution of Mammal Species in the USA (Mainland)",
+    subtitle = "Based on iNaturalist Observations (2023)",
+    color = "Common Name"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+```
+
+```{r}
+# top ten species
+top_species <- inat_sf_cropped_23 %>%
+  group_by(common_name) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice_head(n = 10) %>%
+  pull(common_name)
+
+inat_sf_top <- inat_sf_cropped_23 %>%
+  filter(common_name %in% top_species)
+
+ggplot() +
+  geom_sf(data = usa_cropped, fill = "gray95", color = "black") +  
+  geom_sf(data = inat_sf_top, aes(color = common_name), alpha = 0.7, size = 1) + 
+  scale_color_viridis_d(option = "turbo") + 
+  labs(
+    title = "Spatial Distribution of Top 10 Mammal Species in the USA (Mainland)",
+    subtitle = "Based on iNaturalist Observations (2023)",
+    color = "Species"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+```
+
+
+```{r}
+coords <- st_coordinates(st_centroid(st_geometry(usa_cropped)))
+
+neighbors <- knn2nb(knearneigh(coords, k = 4))
+
+weights <- nb2listw(neighbors)
+
+state_species_count <- usa_cropped %>%
+  left_join(
+    inat_sf %>%
+      st_join(usa_cropped) %>%
+      group_by(NAME) %>%
+      summarise(species_count = n()) %>%
+      st_drop_geometry(),
+    by = c("NAME" = "NAME")
+  ) %>%
+  mutate(species_count = ifelse(is.na(species_count), 0, species_count))  
+
+moran_result <- moran.test(state_species_count$species_count, listw = weights)
+print(moran_result)
+
+ggplot() +
+  geom_sf(data = state_species_count, aes(fill = species_count), color = "white") +
+  scale_fill_viridis_c(option = "plasma", name = "Species Count") +
+  labs(
+    title = "Spatial Distribution of Mammal Species",
+    subtitle = "Based on Observed Counts by State",
+    fill = "Species Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8)
+  )
+```
+
+```{r}
+generate_heatmap <- function(usa_data, inat_data, year_label, fill_limits) {
+  coords <- st_coordinates(st_centroid(st_geometry(usa_data)))
+  neighbors <- knn2nb(knearneigh(coords, k = 4))
+  weights <- nb2listw(neighbors)
+  
+  state_species_count <- usa_data %>%
+    left_join(
+      inat_data %>%
+        st_join(usa_data) %>%
+        group_by(NAME) %>%
+        summarise(species_count = n()) %>%
+        st_drop_geometry(),
+      by = c("NAME" = "NAME")
+    ) %>%
+    mutate(species_count = ifelse(is.na(species_count), 0, species_count))
+  
+  moran_result <- moran.test(state_species_count$species_count, listw = weights)
+  print(paste("Moran's I result for", year_label))
+  print(moran_result)
+  
+  heatmap <- ggplot() +
+    geom_sf(data = state_species_count, aes(fill = species_count), color = "white") +
+    scale_fill_viridis_c(option = "plasma", name = "Species Count", limits = fill_limits) +
+    labs(
+      title = paste("Mammal Species Distribution in", year_label),
+      subtitle = paste("Based on iNaturalist Observations"),
+      fill = "Species Count"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
+      plot.subtitle = element_text(size = 12, hjust = 0.5),
+      legend.position = "bottom",
+      legend.title = element_text(size = 10, face = "bold"),
+      legend.text = element_text(size = 8)
+    )
+  
+  print(heatmap)
+}
+
+all_species_counts <- c(
+  inat_sf_21 %>%
+    st_join(usa_cropped) %>%
+    group_by(NAME) %>%
+    summarise(species_count = n()) %>%
+    pull(species_count),
+  inat_sf_22 %>%
+    st_join(usa_cropped) %>%
+    group_by(NAME) %>%
+    summarise(species_count = n()) %>%
+    pull(species_count),
+  inat_sf_23 %>%
+    st_join(usa_cropped) %>%
+    group_by(NAME) %>%
+    summarise(species_count = n()) %>%
+    pull(species_count)
+)
+
+fill_limits <- c(min(all_species_counts, na.rm = TRUE), max(all_species_counts, na.rm = TRUE))
+
+heatmap_2021 <- generate_heatmap(usa_cropped, inat_sf_21, "2021", fill_limits)
+heatmap_2022 <- generate_heatmap(usa_cropped, inat_sf_22, "2022", fill_limits)
+heatmap_2023 <- generate_heatmap(usa_cropped, inat_sf_23, "2023", fill_limits)
+
+```
+
+# Time trend analysis
+```{r}
+inat_sf <- inat_sf %>%
+  mutate(
+    year = as.integer(format(observed_on, "%Y")),
+    month = as.integer(format(observed_on, "%m"))
+  )
+
+yearly_trends <- inat_sf %>%
+  group_by(year) %>%
+  summarise(species_count = n_distinct(common_name))
+
+ggplot(yearly_trends, aes(x = year, y = species_count)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 2) +
+  labs(
+    title = "Long-term Trends in Mammal Species Observations",
+    x = "Year",
+    y = "Number of Species"
+  ) +
+  theme_minimal()
+
+monthly_trends <- inat_sf %>%
+  group_by(month) %>%
+  summarise(species_count = n_distinct(scientific_name))
+
+ggplot(monthly_trends, aes(x = month, y = species_count)) +
+  geom_line(color = "green", size = 1) +
+  geom_point(color = "purple", size = 2) +
+  scale_x_continuous(breaks = 1:12, labels = month.name) +
+  labs(
+    title = "Seasonal Variation in Mammal Species Observations",
+    x = "Month",
+    y = "Number of Species"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+
+state_species_count <- inat_sf %>%
+  group_by(place_state_name) %>%
+  summarise(species_count = n()) %>%
+  st_drop_geometry()  
+
+state_data <- usa_cropped %>%
+  left_join(state_species_count, by = c("NAME" = "place_state_name")) %>%
+  mutate(species_count = ifelse(is.na(species_count), 0, species_count))  
+
+state_data <- state_data %>%
+  mutate(
+    centroid = st_centroid(geometry),  
+    lon = st_coordinates(centroid)[, 1], 
+    lat = st_coordinates(centroid)[, 2],  
+    area = as.numeric(st_area(geometry)) / 1e6  
+  )
+
+coords <- st_coordinates(state_data$centroid)
+
+neighbors <- knn2nb(knearneigh(coords, k = 4))  
+weights <- nb2listw(neighbors)  
+
+
+#（SLM）
+library(spatialreg)
+slm_model <- lagsarlm(species_count ~ lon + lat + area, data = state_data, listw = weights)
+summary(slm_model)
+
+# （SEM）
+
+sem_model <- errorsarlm(species_count ~ lon + lat + area, data = state_data, listw = weights)
+summary(sem_model)
+
+
+
+ggplot() +
+  geom_sf(data = state_data, aes(fill = species_count), color = "white") +
+  scale_fill_viridis_c(option = "plasma", name = "Species Count") +
+  labs(
+    title = "Species Distribution Across States",
+    subtitle = "Based on Aggregated Observations",
+    fill = "Species Count"
+  ) +
+  theme_minimal()
+```
